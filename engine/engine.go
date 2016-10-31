@@ -19,40 +19,40 @@ import (
 
 const (
 	NumNanosecondsInAMillisecond = 1000000
-	PersistentStorageFilePrefix  = "wukong"
+	PersistentStorageFilePrefix = "wukong"
 )
 
 type Engine struct {
 	// 计数器，用来统计有多少文档被索引等信息
-	numDocumentsIndexed      uint64
-	numDocumentsRemoved      uint64
-	numDocumentsForceUpdated uint64
-	numIndexingRequests      uint64
-	numRemovingRequests      uint64
-	numForceUpdatingRequests uint64
-	numTokenIndexAdded       uint64
-	numDocumentsStored       uint64
+	numDocumentsIndexed                    uint64
+	numDocumentsRemoved                    uint64
+	numDocumentsForceUpdated               uint64
+	numIndexingRequests                    uint64
+	numRemovingRequests                    uint64
+	numForceUpdatingRequests               uint64
+	numTokenIndexAdded                     uint64
+	numDocumentsStored                     uint64
 
 	// 记录初始化参数
-	initOptions types.EngineInitOptions
-	initialized bool
+	initOptions                            types.EngineInitOptions
+	initialized                            bool
 
-	indexers   []core.Indexer
-	rankers    []core.Ranker
-	segmenter  sego.Segmenter
-	stopTokens StopTokens
-	dbs        []storage.Storage
+	indexers                               []core.Indexer
+	rankers                                []core.Ranker
+	segmenter                              sego.Segmenter
+	stopTokens                             StopTokens
+	dbs                                    []storage.Storage
 
 	// 建立索引器使用的通信通道
-	segmenterChannel         chan segmenterRequest
-	indexerAddDocChannels    []chan indexerAddDocumentRequest
-	indexerRemoveDocChannels []chan indexerRemoveDocRequest
-	rankerAddDocChannels     []chan rankerAddDocRequest
+	segmenterChannel                       chan segmenterRequest
+	indexerAddDocChannels                  []chan indexerAddDocumentRequest
+	indexerRemoveDocChannels               []chan indexerRemoveDocRequest
+	rankerAddDocChannels                   []chan rankerAddDocRequest
 
 	// 建立排序器使用的通信通道
-	indexerLookupChannels   []chan indexerLookupRequest
-	rankerRankChannels      []chan rankerRankRequest
-	rankerRemoveDocChannels []chan rankerRemoveDocRequest
+	indexerLookupChannels                  []chan indexerLookupRequest
+	rankerRankChannels                     []chan rankerRankRequest
+	rankerRemoveDocChannels                []chan rankerRemoveDocRequest
 
 	// 建立持久存储使用的通信通道
 	persistentStorageIndexDocumentChannels []chan persistentStorageIndexDocumentRequest
@@ -90,57 +90,57 @@ func (engine *Engine) Init(options types.EngineInitOptions) {
 
 	// 初始化分词器通道
 	engine.segmenterChannel = make(
-		chan segmenterRequest, options.NumSegmenterThreads)
+	chan segmenterRequest, options.NumSegmenterThreads)
 
 	// 初始化索引器通道
 	engine.indexerAddDocChannels = make(
-		[]chan indexerAddDocumentRequest, options.NumShards)
+	[]chan indexerAddDocumentRequest, options.NumShards)
 	engine.indexerRemoveDocChannels = make(
-		[]chan indexerRemoveDocRequest, options.NumShards)
+	[]chan indexerRemoveDocRequest, options.NumShards)
 	engine.indexerLookupChannels = make(
-		[]chan indexerLookupRequest, options.NumShards)
+	[]chan indexerLookupRequest, options.NumShards)
 	for shard := 0; shard < options.NumShards; shard++ {
 		engine.indexerAddDocChannels[shard] = make(
-			chan indexerAddDocumentRequest,
-			options.IndexerBufferLength)
+		chan indexerAddDocumentRequest,
+		options.IndexerBufferLength)
 		engine.indexerRemoveDocChannels[shard] = make(
-			chan indexerRemoveDocRequest,
-			options.IndexerBufferLength)
+		chan indexerRemoveDocRequest,
+		options.IndexerBufferLength)
 		engine.indexerLookupChannels[shard] = make(
-			chan indexerLookupRequest,
-			options.IndexerBufferLength)
+		chan indexerLookupRequest,
+		options.IndexerBufferLength)
 	}
 
 	// 初始化排序器通道
 	engine.rankerAddDocChannels = make(
-		[]chan rankerAddDocRequest, options.NumShards)
+	[]chan rankerAddDocRequest, options.NumShards)
 	engine.rankerRankChannels = make(
-		[]chan rankerRankRequest, options.NumShards)
+	[]chan rankerRankRequest, options.NumShards)
 	engine.rankerRemoveDocChannels = make(
-		[]chan rankerRemoveDocRequest, options.NumShards)
+	[]chan rankerRemoveDocRequest, options.NumShards)
 	for shard := 0; shard < options.NumShards; shard++ {
 		engine.rankerAddDocChannels[shard] = make(
-			chan rankerAddDocRequest,
-			options.RankerBufferLength)
+		chan rankerAddDocRequest,
+		options.RankerBufferLength)
 		engine.rankerRankChannels[shard] = make(
-			chan rankerRankRequest,
-			options.RankerBufferLength)
+		chan rankerRankRequest,
+		options.RankerBufferLength)
 		engine.rankerRemoveDocChannels[shard] = make(
-			chan rankerRemoveDocRequest,
-			options.RankerBufferLength)
+		chan rankerRemoveDocRequest,
+		options.RankerBufferLength)
 	}
 
 	// 初始化持久化存储通道
 	if engine.initOptions.UsePersistentStorage {
 		engine.persistentStorageIndexDocumentChannels =
-			make([]chan persistentStorageIndexDocumentRequest,
-				engine.initOptions.PersistentStorageShards)
+		make([]chan persistentStorageIndexDocumentRequest,
+		engine.initOptions.PersistentStorageShards)
 		for shard := 0; shard < engine.initOptions.PersistentStorageShards; shard++ {
 			engine.persistentStorageIndexDocumentChannels[shard] = make(
-				chan persistentStorageIndexDocumentRequest)
+			chan persistentStorageIndexDocumentRequest)
 		}
 		engine.persistentStorageInitChannel = make(
-			chan bool, engine.initOptions.PersistentStorageShards)
+		chan bool, engine.initOptions.PersistentStorageShards)
 	}
 
 	// 启动分词器
@@ -190,6 +190,7 @@ func (engine *Engine) Init(options types.EngineInitOptions) {
 		for shard := 0; shard < engine.initOptions.PersistentStorageShards; shard++ {
 			<-engine.persistentStorageInitChannel
 		}
+
 		for {
 			runtime.Gosched()
 			if engine.numIndexingRequests == engine.numDocumentsIndexed {
@@ -211,6 +212,8 @@ func (engine *Engine) Init(options types.EngineInitOptions) {
 		for shard := 0; shard < engine.initOptions.PersistentStorageShards; shard++ {
 			go engine.persistentStorageIndexDocumentWorker(shard)
 		}
+
+		engine.internalIndexDocument(0, types.DocumentIndexData{}, true)
 	}
 
 	atomic.AddUint64(&engine.numDocumentsStored, engine.numIndexingRequests)
@@ -237,7 +240,7 @@ func (engine *Engine) IndexDocument(docId uint64, data types.DocumentIndexData, 
 }
 
 func (engine *Engine) internalIndexDocument(
-	docId uint64, data types.DocumentIndexData, forceUpdate bool) {
+docId uint64, data types.DocumentIndexData, forceUpdate bool) {
 	if !engine.initialized {
 		log.Fatal("必须先初始化引擎")
 	}
@@ -289,6 +292,17 @@ func (engine *Engine) RemoveDocument(docId uint64, forceUpdate bool) {
 	}
 }
 
+func (engine *Engine)Tokens(text []byte)(tokens []string){
+	querySegments := engine.segmenter.Segment(text)
+	for _, s := range querySegments {
+		token := s.Token().Text()
+		if !engine.stopTokens.IsStopToken(token) {
+			tokens = append(tokens, s.Token().Text())
+		}
+	}
+	return
+}
+
 // 查找满足搜索条件的文档，此函数线程安全
 func (engine *Engine) Search(request types.SearchRequest) (output types.SearchResponse) {
 	if !engine.initialized {
@@ -308,13 +322,7 @@ func (engine *Engine) Search(request types.SearchRequest) (output types.SearchRe
 	// 收集关键词
 	tokens := []string{}
 	if request.Text != "" {
-		querySegments := engine.segmenter.Segment([]byte(request.Text))
-		for _, s := range querySegments {
-			token := s.Token().Text()
-			if !engine.stopTokens.IsStopToken(token) {
-				tokens = append(tokens, s.Token().Text())
-			}
-		}
+		tokens = engine.Tokens([]byte(request.Text))
 	} else {
 		for _, t := range request.Tokens {
 			tokens = append(tokens, t)
@@ -323,7 +331,7 @@ func (engine *Engine) Search(request types.SearchRequest) (output types.SearchRe
 
 	// 建立排序器返回的通信通道
 	rankerReturnChannel := make(
-		chan rankerReturnRequest, engine.initOptions.NumShards)
+	chan rankerReturnRequest, engine.initOptions.NumShards)
 
 	// 生成查找请求
 	lookupRequest := indexerLookupRequest{
@@ -359,7 +367,7 @@ func (engine *Engine) Search(request types.SearchRequest) (output types.SearchRe
 		}
 	} else {
 		// 设置超时
-		deadline := time.Now().Add(time.Nanosecond * time.Duration(NumNanosecondsInAMillisecond*request.Timeout))
+		deadline := time.Now().Add(time.Nanosecond * time.Duration(NumNanosecondsInAMillisecond * request.Timeout))
 		for shard := 0; shard < engine.initOptions.NumShards; shard++ {
 			select {
 			case rankerOutput := <-rankerReturnChannel:
@@ -399,7 +407,7 @@ func (engine *Engine) Search(request types.SearchRequest) (output types.SearchRe
 				end = len(rankOutput)
 			} else {
 				start = utils.MinInt(rankOptions.OutputOffset, len(rankOutput))
-				end = utils.MinInt(start+rankOptions.MaxOutputs, len(rankOutput))
+				end = utils.MinInt(start + rankOptions.MaxOutputs, len(rankOutput))
 			}
 			output.Docs = rankOutput[start:end]
 		}
@@ -414,8 +422,8 @@ func (engine *Engine) FlushIndex() {
 	for {
 		runtime.Gosched()
 		if engine.numIndexingRequests == engine.numDocumentsIndexed &&
-			engine.numRemovingRequests*uint64(engine.initOptions.NumShards) == engine.numDocumentsRemoved &&
-			(!engine.initOptions.UsePersistentStorage || engine.numIndexingRequests == engine.numDocumentsStored) {
+		engine.numRemovingRequests * uint64(engine.initOptions.NumShards) == engine.numDocumentsRemoved &&
+		(!engine.initOptions.UsePersistentStorage || engine.numIndexingRequests == engine.numDocumentsStored) {
 			// 保证 CHANNEL 中 REQUESTS 全部被执行完
 			break
 		}
@@ -424,7 +432,7 @@ func (engine *Engine) FlushIndex() {
 	engine.IndexDocument(0, types.DocumentIndexData{}, true)
 	for {
 		runtime.Gosched()
-		if engine.numForceUpdatingRequests*uint64(engine.initOptions.NumShards) == engine.numDocumentsForceUpdated {
+		if engine.numForceUpdatingRequests * uint64(engine.initOptions.NumShards) == engine.numDocumentsForceUpdated {
 			return
 		}
 	}
@@ -442,5 +450,5 @@ func (engine *Engine) Close() {
 
 // 从文本hash得到要分配到的shard
 func (engine *Engine) getShard(hash uint32) int {
-	return int(hash - hash/uint32(engine.initOptions.NumShards)*uint32(engine.initOptions.NumShards))
+	return int(hash - hash / uint32(engine.initOptions.NumShards) * uint32(engine.initOptions.NumShards))
 }
